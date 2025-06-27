@@ -1,0 +1,1117 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Specific Skills Resume Maker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/7.8.2/docx.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            background: #f0f0f0;
+            padding: 20px;
+        }
+        .cv-maker {
+            max-width: 900px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border: 2px solid #000;
+        }
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        .section h2 {
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 1px solid #000;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+        .input-group {
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .input-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .input-group input,
+        .input-group textarea,
+        .input-group select {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #000;
+            background: #fff;
+            font-size: 14px;
+        }
+        .checkbox-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin: 5px 0;
+        }
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+        button {
+            display: block;
+            margin: 15px auto;
+            padding: 10px 20px;
+            background: #000;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #333;
+        }
+        .output-container {
+            display: none;
+            background: white;
+            padding: 20px;
+            border: 2px solid #000;
+            margin-top: 20px;
+        }
+        .output-section {
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .output-section h3 {
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 1px solid #000;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+        .output-section p {
+            margin: 5px 0;
+        }
+        .output-section table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .output-section table, th, td {
+            border: 1px solid #000;
+            padding: 6px;
+            font-size: 14px;
+        }
+        .photo-preview, .output-photo {
+            width: 100px;
+            height: 100px;
+            border: 1px solid #000;
+            margin: 10px 0;
+            display: none;
+            object-fit: cover;
+        }
+        .dynamic-section {
+            border: 1px dashed #000;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .checkbox-output {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 1px solid #000;
+            text-align: center;
+            line-height: 12px;
+            margin-right: 5px;
+            font-size: 12px;
+            vertical-align: middle;
+        }
+        .checked {
+            content: 'X';
+        }
+        .indent {
+            margin-left: 20px;
+        }
+        .price-note {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            margin-top: 20px;
+        }
+        @media print {
+            .cv-maker, button, .price-note {
+                display: none;
+            }
+            .output-container {
+                display: block !important;
+                border: none;
+                padding: 0;
+            }
+        }
+        @media screen and (max-width: 600px) {
+            .cv-maker {
+                padding: 10px;
+            }
+            .input-group input,
+            .input-group textarea,
+            .input-group select {
+                font-size: 12px;
+            }
+            button {
+                width: 100%;
+            }
+            .checkbox-group label {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="cv-maker">
+        <h1>Specific Skills Resume Maker</h1>
+        <form id="cvForm">
+            <!-- Personal Information -->
+            <div class="section">
+                <h2>Personal Information</h2>
+                <div class="input-group">
+                    <label>Name</label>
+                    <input type="text" id="name" placeholder="Your Name">
+                </div>
+                <div class="input-group">
+                    <label>Photo</label>
+                    <input type="file" id="photo" accept="image/*">
+                    <img id="photoPreview" class="photo-preview" alt="Photo Preview">
+                </div>
+                <div class="input-group">
+                    <label>Date of Birth</label>
+                    <input type="date" id="dob">
+                </div>
+                <div class="input-group">
+                    <label>Age</label>
+                    <input type="number" id="age" placeholder="Your Age">
+                </div>
+                <div class="input-group">
+                    <label>Gender</label>
+                    <select id="gender">
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Passport Number</label>
+                    <input type="text" id="passport" placeholder="Passport Number">
+                </div>
+                <div class="input-group">
+                    <label>Issue Date (Validity)</label>
+                    <input type="date" id="passportIssueDate">
+                </div>
+                <div class="input-group">
+                    <label>Issue Place</label>
+                    <input type="text" id="passportIssuePlace" placeholder="Issue Place">
+                </div>
+                <div class="input-group">
+                    <label>Marital Status</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="marital" value="Single"> Single</label>
+                        <label><input type="radio" name="marital" value="Married"> Married</label>
+                        <label><input type="radio" name="marital" value="Divorced"> Divorced</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Address in Nepal</label>
+                    <textarea id="nepalAddress" placeholder="Address in Nepal"></textarea>
+                </div>
+                <div class="input-group">
+                    <label>Address in Japan</label>
+                    <textarea id="japanAddress" placeholder="Address in Japan"></textarea>
+                </div>
+            </div>
+
+            <!-- Residence Status -->
+            <div class="section">
+                <h2>Residence Status and Qualifications</h2>
+                <div class="input-group">
+                    <label>Past Residence Status and Details</label>
+                    <textarea id="pastResidence" placeholder="Describe past residence status"></textarea>
+                </div>
+                <div class="input-group">
+                    <label>Residence Permit</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="residencePermit" value="Yes"> Yes</label>
+                        <label><input type="radio" name="residencePermit" value="No"> No</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Specific Skills Evaluation Exam</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="specificSkillsExam" value="Yes"> Yes</label>
+                        <label><input type="radio" name="specificSkillsExam" value="No"> No</label>
+                    </div>
+                </div>
+                <div class="input-group indent">
+                    <label>Field</label>
+                    <input type="text" id="field" placeholder="Field of specific skills">
+                </div>
+                <div class="input-group">
+                    <label>Trainee</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" id="trainee"> Trainee</label>
+                        <label><input type="checkbox" id="specialistGrade"> Specialist Grade</label>
+                        <label><input type="checkbox" id="thirdGrade"> Third Grade</label>
+                        <label><input type="checkbox" id="evaluationReport"> Evaluation Report</label>
+                    </div>
+                </div>
+                <div class="input-group indent">
+                    <label>Trainee Occupation</label>
+                    <input type="text" id="traineeOccupation" placeholder="Trainee Occupation">
+                </div>
+                <div class="input-group">
+                    <label>Specific Skills</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="specificSkillsStatus" value="1st"> 1st</label>
+                        <label><input type="radio" name="specificSkillsStatus" value="2nd"> 2nd</label>
+                    </div>
+                </div>
+                <div class="input-group indent">
+                    <label>Field and Category</label>
+                    <input type="text" id="fieldCategory" placeholder="Field and Category">
+                </div>
+                <div class="input-group">
+                    <label>Residence Status</label>
+                    <input type="text" id="residenceStatus" placeholder="Residence Status">
+                </div>
+                <div class="input-group">
+                    <label>Residence Expiry</label>
+                    <input type="date" id="residenceExpiry">
+                </div>
+                <div class="input-group">
+                    <label>Japanese Language Proficiency</label>
+                    <input type="text" id="japaneseProficiency" placeholder="Japanese Proficiency Level">
+                </div>
+                <div class="input-group">
+                    <label>Student Status</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" id="student"> Yes</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Language Proficiency Test</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="languageTest" value="Yes"> Yes</label>
+                        <label><input type="radio" name="languageTest" value="No"> No</label>
+                    </div>
+                </div>
+                <div class="input-group indent">
+                    <label>Level and Institution</label>
+                    <input type="text" id="languageTestDetails" placeholder="Level and Institution">
+                </div>
+                <div class="input-group">
+                    <label>Desired Years of Service</label>
+                    <input type="number" id="yearsOfService" placeholder="Years">
+                </div>
+            </div>
+
+            <!-- Education -->
+            <div class="section" id="educationSection">
+                <h2>Education</h2>
+                <div class="dynamic-section" id="education0">
+                    <div class="input-group">
+                        <label>Start Year/Month</label>
+                        <input type="date" class="education-start">
+                    </div>
+                    <div class="input-group">
+                        <label>End Year/Month</label>
+                        <input type="date" class="education-end">
+                    </div>
+                    <div class="input-group">
+                        <label>School Name</label>
+                        <input type="text" class="education-school" placeholder="School Name">
+                    </div>
+                    <div class="input-group">
+                        <label>Major</label>
+                        <input type="text" class="education-major" placeholder="Major">
+                    </div>
+                    <div class="input-group">
+                        <label>Specialization</label>
+                        <input type="text" class="education-specialization" placeholder="Specialization">
+                    </div>
+                </div>
+                <button type="button" onclick="addEducation()">Add Education</button>
+            </div>
+
+            <!-- Licenses and Certifications -->
+            <div class="section">
+                <h2>Other Licenses/Certifications</h2>
+                <div class="input-group">
+                    <label>Licenses/Certifications</label>
+                    <textarea id="licenses" placeholder="List any licenses or certifications"></textarea>
+                </div>
+            </div>
+
+            <!-- Work Experience -->
+            <div class="section" id="workSection">
+                <h2>Work Experience in Japan</h2>
+                <div class="dynamic-section" id="work0">
+                    <div class="input-group">
+                        <label>Start Year/Month</label>
+                        <input type="date" class="work-start">
+                    </div>
+                    <div class="input-group">
+                        <label>End Year/Month</label>
+                        <input type="date" class="work-end">
+                    </div>
+                    <div class="input-group">
+                        <label>Company Name</label>
+                        <input type="text" class="work-company" placeholder="Company Name">
+                    </div>
+                    <div class="input-group">
+                        <label>Location</label>
+                        <input type="text" class="work-location" placeholder="Location">
+                    </div>
+                    <div class="input-group">
+                        <label>Business Description</label>
+                        <textarea class="work-description" placeholder="Business Description"></textarea>
+                    </div>
+                </div>
+                <button type="button" onclick="addWork()">Add Work Experience</button>
+            </div>
+
+            <!-- Organization -->
+            <div class="section">
+                <h2>Organization</h2>
+                <div class="input-group">
+                    <label>Supervisory Organization and Support Agency</label>
+                    <input type="text" id="supervisoryOrg" placeholder="Supervisory Organization Name">
+                </div>
+                <div class="input-group">
+                    <label>Residence Status</label>
+                    <input type="text" id="orgResidenceStatus" placeholder="Residence Status">
+                </div>
+            </div>
+
+            <!-- Family Composition -->
+            <div class="section" id="familySection">
+                <h2>Family Composition</h2>
+                <div class="dynamic-section" id="family0">
+                    <div class="input-group">
+                        <label>Name</label>
+                        <input type="text" class="family-name" placeholder="Family Member Name">
+                    </div>
+                    <div class="input-group">
+                        <label>Relationship</label>
+                        <input type="text" class="family-relationship" placeholder="Relationship">
+                    </div>
+                    <div class="input-group">
+                        <label>Age</label>
+                        <input type="number" class="family-age" placeholder="Age">
+                    </div>
+                    <div class="input-group">
+                        <label>Occupation</label>
+                        <input type="text" class="family-occupation" placeholder="Occupation">
+                    </div>
+                </div>
+                <button type="button" onclick="addFamily()">Add Family Member</button>
+            </div>
+
+            <!-- Other Information -->
+            <div class="section">
+                <h2>Other Information</h2>
+                <div class="input-group">
+                    <label>Blood Type</label>
+                    <input type="text" id="bloodType" placeholder="Blood Type">
+                </div>
+                <div class="input-group">
+                    <label>Vision</label>
+                    <input type="text" id="vision" placeholder="Vision">
+                </div>
+                <div class="input-group">
+                    <label>Color Blindness</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="colorBlindness" value="No"> No</label>
+                        <label><input type="radio" name="colorBlindness" value="Yes"> Yes</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Dominant Hand</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="dominantHand" value="Right"> Right</label>
+                        <label><input type="radio" name="dominantHand" value="Left"> Left</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Sweaty Hands</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="sweatyHands" value="Yes"> Yes</label>
+                        <label><input type="radio" name="sweatyHands" value="No"> No</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Height (cm)</label>
+                    <input type="number" id="height" placeholder="Height in cm">
+                </div>
+                <div class="input-group">
+                    <label>Weight (kg)</label>
+                    <input type="number" id="weight" placeholder="Weight in kg">
+                </div>
+                <div class="input-group">
+                    <label>Tattoos</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="tattoos" value="Yes"> Yes</label>
+                        <label><input type="radio" name="tattoos" value="No"> No</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Smoking</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="smoking" value="Yes"> Yes</label>
+                        <label><input type="radio" name="smoking" value="No"> No</label>
+                        <label><input type="radio" name="smoking" value="Occasionally"> Occasionally</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Drinking</label>
+                    <div class="checkbox-group">
+                        <label><input type="radio" name="drinking" value="Yes"> Yes</label>
+                        <label><input type="radio" name="drinking" value="No"> No</label>
+                        <label><input type="radio" name="drinking" value="Occasionally"> Occasionally</label>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Food Restrictions</label>
+                    <textarea id="foodRestrictions" placeholder="Food Restrictions"></textarea>
+                </div>
+            </div>
+        </form>
+        <button onclick="generateCV()">Generate Resume</button>
+        <button onclick="exportPDF()">Export as PDF</button>
+        <button onclick="exportWord()">Export as Word</button>
+        <p class="price-note">This Resume Maker software is available for purchase at $20.</p>
+    </div>
+
+    <div class="output-container" id="outputContainer">
+        <div class="output-section">
+            <h3>Specific Skills Resume</h3>
+            <h3>Personal Information</h3>
+            <p><strong>Name:</strong> <span id="outputName"></span></p>
+            <p><strong>Photo:</strong></p>
+            <img id="outputPhoto" class="output-photo" alt="Photo">
+            <p><strong>Date of Birth:</strong> <span id="outputDob"></span></p>
+            <p><strong>Age:</strong> <span id="outputAge"></span></p>
+            <p><strong>Gender:</strong> <span id="outputGender"></span></p>
+            <p><strong>Passport Number:</strong> <span id="outputPassport"></span></p>
+            <p><strong>Issue Date (Validity):</strong> <span id="outputPassportIssueDate"></span></p>
+            <p><strong>Issue Place:</strong> <span id="outputPassportIssuePlace"></span></p>
+            <p><strong>Marital Status:</strong> 
+                <span class="checkbox-output" id="outputMaritalSingle">[ ]</span> Single 
+                <span class="checkbox-output" id="outputMaritalMarried">[ ]</span> Married 
+                <span class="checkbox-output" id="outputMaritalDivorced">[ ]</span> Divorced
+            </p>
+            <p><strong>Address in Nepal:</strong> <span id="outputNepalAddress"></span></p>
+            <p><strong>Address in Japan:</strong> <span id="outputJapanAddress"></span></p>
+        </div>
+        <div class="output-section">
+            <h3>Residence Status and Qualifications</h3>
+            <p><strong>Past Residence Status and Details:</strong> <span id="outputPastResidence"></span></p>
+            <p><strong>Residence Permit:</strong> 
+                <span class="checkbox-output" id="outputResidencePermitYes">[ ]</span> Yes 
+                <span class="checkbox-output" id="outputResidencePermitNo">[ ]</span> No
+            </p>
+            <p><strong>Specific Skills Evaluation Exam:</strong> 
+                <span class="checkbox-output" id="outputSpecificSkillsExamYes">[ ]</span> Yes 
+                <span class="checkbox-output" id="outputSpecificSkillsExamNo">[ ]</span> No
+            </p>
+            <p class="indent"><strong>Field:</strong> <span id="outputField"></span></p>
+            <p><strong>Trainee:</strong> 
+                <span class="checkbox-output" id="outputTrainee">[ ]</span> ( 
+                <span class="checkbox-output" id="outputSpecialistGrade">[ ]</span> Specialist Grade 
+                <span class="checkbox-output" id="outputThirdGrade">[ ]</span> Third Grade 
+                <span class="checkbox-output" id="outputEvaluationReport">[ ]</span> Evaluation Report )
+            </p>
+            <p class="indent"><strong>Trainee Occupation:</strong> <span id="outputTraineeOccupation"></span></p>
+            <p><strong>Specific Skills:</strong> 
+                <span class="checkbox-output" id="outputSpecificSkillsStatus">[ ]</span> ( 
+                <span class="checkbox-output" id="outputSpecificSkills1st">[ ]</span> 1st 
+                <span class="checkbox-output" id="outputSpecificSkills2nd">[ ]</span> 2nd )
+            </p>
+            <p class="indent"><strong>Field and Category:</strong> <span id="outputFieldCategory"></span></p>
+            <p><strong>Residence Status:</strong> <span id="outputResidenceStatus"></span></p>
+            <p><strong>Residence Expiry:</strong> <span id="outputResidenceExpiry"></span></p>
+            <p><strong>Japanese Language Proficiency:</strong> <span id="outputJapaneseProficiency"></span></p>
+            <p><strong>Student Status:</strong> 
+                <span class="checkbox-output" id="outputStudent">[ ]</span> Yes
+            </p>
+            <p><strong>Language Proficiency Test:</strong> 
+                <span class="checkbox-output" id="outputLanguageTestYes">[ ]</span> Yes 
+                <span class="checkbox-output" id="outputLanguageTestNo">[ ]</span> No
+            </p>
+            <p class="indent"><strong>Level and Institution:</strong> <span id="outputLanguageTestDetails"></span></p>
+            <p><strong>Desired Years of Service:</strong> <span id="outputYearsOfService"></span> Years</p>
+        </div>
+        <div class="output-section">
+            <h3>Education</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Start Year/Month</th>
+                        <th>End Year/Month</th>
+                        <th>School Name</th>
+                        <th>Major</th>
+                        <th>Specialization</th>
+                    </tr>
+                </thead>
+                <tbody id="educationTableBody"></tbody>
+            </table>
+        </div>
+        <div class="output-section">
+            <h3>Other Licenses/Certifications</h3>
+            <p><span id="outputLicenses"></span></p>
+        </div>
+        <div class="output-section">
+            <h3>Work Experience in Japan</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Start Year/Month</th>
+                        <th>End Year/Month</th>
+                        <th>Company Name</th>
+                        <th>Location</th>
+                        <th>Business Description</th>
+                    </tr>
+                </thead>
+                <tbody id="workTableBody"></tbody>
+            </table>
+        </div>
+        <div class="output-section">
+            <h3>Organization</h3>
+            <p><strong>Supervisory Organization and Support Agency:</strong> <span id="outputSupervisoryOrg"></span></p>
+            <p><strong>Residence Status:</strong> <span id="outputOrgResidenceStatus"></span></p>
+        </div>
+        <div class="output-section">
+            <h3>Family Composition</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Relationship</th>
+                        <th>Age</th>
+                        <th>Occupation</th>
+                    </tr>
+                </thead>
+                <tbody id="familyTableBody"></tbody>
+            </table>
+        </div>
+        <div class="output-section">
+            <h3>Other Information</h3>
+            <p><strong>Blood Type:</strong> <span id="outputBloodType"></span></p>
+            <p><strong>Vision:</strong> <span id="outputVision"></span></p>
+            <p><strong>Color Blindness:</strong> 
+                <span class="checkbox-output" id="outputColorBlindnessNo">[ ]</span> No 
+                <span class="checkbox-output" id="outputColorBlindnessYes">[ ]</span> Yes
+            </p>
+            <p><strong>Dominant Hand:</strong> 
+                <span class="checkbox-output" id="outputDominantHandRight">[ ]</span> Right 
+                <span class="checkbox-output" id="outputDominantHandLeft">[ ]</span> Left
+            </p>
+            <p><strong>Sweaty Hands:</strong> 
+                <span class="checkbox-output" id="outputSweatyHandsYes">[ ]</span> Yes 
+                <span class="checkbox-output" id="outputSweatyHandsNo">[ ]</span> No
+            </p>
+            <p><strong>Height:</strong> <span id="outputHeight"></span> cm</p>
+            <p><strong>Weight:</strong> <span id="outputWeight"></span> kg</p>
+            <p><strong>Tattoos:</strong> 
+                <span class="checkbox-output" id="outputTattoosYes">[ ]</span> Yes 
+                <span class="checkbox-output" id="outputTattoosNo">[ ]</span> No
+            </p>
+            <p><strong>Smoking:</strong> 
+                <span class="checkbox-output" id="outputSmokingYes">[ ]</span> Yes 
+                <span class="checkbox-output" id="outputSmokingNo">[ ]</span> No 
+                <span class="checkbox-output" id="outputSmokingOccasionally">[ ]</span> Occasionally
+            </p>
+            <p><strong>Drinking:</strong> 
+                <span class="checkbox-output" id="outputDrinkingYes">[ ]</span> Yes 
+                <span class="checkbox-output" id="outputDrinkingNo">[ ]</span> No 
+                <span class="checkbox-output" id="outputDrinkingOccasionally">[ ]</span> Occasionally
+            </p>
+            <p><strong>Food Restrictions:</strong> <span id="outputFoodRestrictions"></span></p>
+        </div>
+    </div>
+
+    <script>
+        let educationCount = 1;
+        let workCount = 1;
+        let familyCount = 1;
+
+        function addEducation() {
+            const section = document.createElement('div');
+            section.className = 'dynamic-section';
+            section.id = `education${educationCount}`;
+            section.innerHTML = `
+                <div class="input-group">
+                    <label>Start Year/Month</label>
+                    <input type="date" class="education-start">
+                </div>
+                <div class="input-group">
+                    <label>End Year/Month</label>
+                    <input type="date" class="education-end">
+                </div>
+                <div class="input-group">
+                    <label>School Name</label>
+                    <input type="text" class="education-school" placeholder="School Name">
+                </div>
+                <div class="input-group">
+                    <label>Major</label>
+                    <input type="text" class="education-major" placeholder="Major">
+                </div>
+                <div class="input-group">
+                    <label>Specialization</label>
+                    <input type="text" class="education-specialization" placeholder="Specialization">
+                </div>
+            `;
+            document.getElementById('educationSection').insertBefore(section, document.getElementById('educationSection').lastElementChild);
+            educationCount++;
+        }
+
+        function addWork() {
+            const section = document.createElement('div');
+            section.className = 'dynamic-section';
+            section.id = `work${workCount}`;
+            section.innerHTML = `
+                <div class="input-group">
+                    <label>Start Year/Month</label>
+                    <input type="date" class="work-start">
+                </div>
+                <div class="input-group">
+                    <label>End Year/Month</label>
+                    <input type="date" class="work-end">
+                </div>
+                <div class="input-group">
+                    <label>Company Name</label>
+                    <input type="text" class="work-company" placeholder="Company Name">
+                </div>
+                <div class="input-group">
+                    <label>Location</label>
+                    <input type="text" class="work-location" placeholder="Location">
+                </div>
+                <div class="input-group">
+                    <label>Business Description</label>
+                    <textarea class="work-description" placeholder="Business Description"></textarea>
+                </div>
+            `;
+            document.getElementById('workSection').insertBefore(section, document.getElementById('workSection').lastElementChild);
+            workCount++;
+        }
+
+        function addFamily() {
+            const section = document.createElement('div');
+            section.className = 'dynamic-section';
+            section.id = `family${familyCount}`;
+            section.innerHTML = `
+                <div class="input-group">
+                    <label>Name</label>
+                    <input type="text" class="family-name" placeholder="Family Member Name">
+                </div>
+                <div class="input-group">
+                    <label>Relationship</label>
+                    <input type="text" class="family-relationship" placeholder="Relationship">
+                </div>
+                <div class="input-group">
+                    <label>Age</label>
+                    <input type="number" class="family-age" placeholder="Age">
+                </div>
+                <div class="input-group">
+                    <label>Occupation</label>
+                    <input type="text" class="family-occupation" placeholder="Occupation">
+                </div>
+            `;
+            document.getElementById('familySection').insertBefore(section, document.getElementById('familySection').lastElementChild);
+            familyCount++;
+        }
+
+        function generateCV() {
+            document.getElementById('outputContainer').style.display = 'block';
+
+            // Personal Information
+            document.getElementById('outputName').textContent = document.getElementById('name').value;
+            const photoInput = document.getElementById('photo');
+            if (photoInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.getElementById('outputPhoto');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                };
+                reader.readAsDataURL(photoInput.files[0]);
+            }
+            document.getElementById('outputDob').textContent = document.getElementById('dob').value;
+            document.getElementById('outputAge').textContent = document.getElementById('age').value;
+            document.getElementById('outputGender').textContent = document.getElementById('gender').value;
+            document.getElementById('outputPassport').textContent = document.getElementById('passport').value;
+            document.getElementById('outputPassportIssueDate').textContent = document.getElementById('passportIssueDate').value;
+            document.getElementById('outputPassportIssuePlace').textContent = document.getElementById('passportIssuePlace').value;
+            const marital = document.querySelector('input[name="marital"]:checked')?.value || '';
+            document.getElementById('outputMaritalSingle').textContent = marital === 'Single' ? '[X]' : '[ ]';
+            document.getElementById('outputMaritalMarried').textContent = marital === 'Married' ? '[X]' : '[ ]';
+            document.getElementById('outputMaritalDivorced').textContent = marital === 'Divorced' ? '[X]' : '[ ]';
+            document.getElementById('outputNepalAddress').textContent = document.getElementById('nepalAddress').value;
+            document.getElementById('outputJapanAddress').textContent = document.getElementById('japanAddress').value;
+
+            // Residence Status
+            document.getElementById('outputPastResidence').textContent = document.getElementById('pastResidence').value;
+            const residencePermit = document.querySelector('input[name="residencePermit"]:checked')?.value || '';
+            document.getElementById('outputResidencePermitYes').textContent = residencePermit === 'Yes' ? '[X]' : '[ ]';
+            document.getElementById('outputResidencePermitNo').textContent = residencePermit === 'No' ? '[X]' : '[ ]';
+            const specificSkillsExam = document.querySelector('input[name="specificSkillsExam"]:checked')?.value || '';
+            document.getElementById('outputSpecificSkillsExamYes').textContent = specificSkillsExam === 'Yes' ? '[X]' : '[ ]';
+            document.getElementById('outputSpecificSkillsExamNo').textContent = specificSkillsExam === 'No' ? '[X]' : '[ ]';
+            document.getElementById('outputField').textContent = document.getElementById('field').value;
+            document.getElementById('outputTrainee').textContent = document.getElementById('trainee').checked ? '[X]' : '[ ]';
+            document.getElementById('outputSpecialistGrade').textContent = document.getElementById('specialistGrade').checked ? '[X]' : '[ ]';
+            document.getElementById('outputThirdGrade').textContent = document.getElementById('thirdGrade').checked ? '[X]' : '[ ]';
+            document.getElementById('outputEvaluationReport').textContent = document.getElementById('evaluationReport').checked ? '[X]' : '[ ]';
+            document.getElementById('outputTraineeOccupation').textContent = document.getElementById('traineeOccupation').value;
+            const specificSkillsStatus = document.querySelector('input[name="specificSkillsStatus"]:checked')?.value || '';
+            document.getElementById('outputSpecificSkillsStatus').textContent = specificSkillsStatus ? '[X]' : '[ ]';
+            document.getElementById('outputSpecificSkills1st').textContent = specificSkillsStatus === '1st' ? '[X]' : '[ ]';
+            document.getElementById('outputSpecificSkills2nd').textContent = specificSkillsStatus === '2nd' ? '[X]' : '[ ]';
+            document.getElementById('outputFieldCategory').textContent = document.getElementById('fieldCategory').value;
+            document.getElementById('outputResidenceStatus').textContent = document.getElementById('residenceStatus').value;
+            document.getElementById('outputResidenceExpiry').textContent = document.getElementById('residenceExpiry').value;
+            document.getElementById('outputJapaneseProficiency').textContent = document.getElementById('japaneseProficiency').value;
+            document.getElementById('outputStudent').textContent = document.getElementById('student').checked ? '[X]' : '[ ]';
+            const languageTest = document.querySelector('input[name="languageTest"]:checked')?.value || '';
+            document.getElementById('outputLanguageTestYes').textContent = languageTest === 'Yes' ? '[X]' : '[ ]';
+            document.getElementById('outputLanguageTestNo').textContent = languageTest === 'No' ? '[X]' : '[ ]';
+            document.getElementById('outputLanguageTestDetails').textContent = document.getElementById('languageTestDetails').value;
+            document.getElementById('outputYearsOfService').textContent = document.getElementById('yearsOfService').value;
+
+            // Education Table
+            const educationTableBody = document.getElementById('educationTableBody');
+            educationTableBody.innerHTML = '';
+            for (let i = 0; i < educationCount; i++) {
+                const section = document.getElementById(`education${i}`);
+                if (section) {
+                    const start = section.querySelector('.education-start').value;
+                    const end = section.querySelector('.education-end').value;
+                    const school = section.querySelector('.education-school').value;
+                    const major = section.querySelector('.education-major').value;
+                    const specialization = section.querySelector('.education-specialization').value;
+                    if (start || end || school || major || specialization) {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${start}</td>
+                            <td>${end}</td>
+                            <td>${school}</td>
+                            <td>${major}</td>
+                            <td>${specialization}</td>
+                        `;
+                        educationTableBody.appendChild(row);
+                    }
+                }
+            }
+
+            // Licenses
+            document.getElementById('outputLicenses').textContent = document.getElementById('licenses').value;
+
+            // Work Experience Table
+            const workTableBody = document.getElementById('workTableBody');
+            workTableBody.innerHTML = '';
+            for (let i = 0; i < workCount; i++) {
+                const section = document.getElementById(`work${i}`);
+                if (section) {
+                    const start = section.querySelector('.work-start').value;
+                    const end = section.querySelector('.work-end').value;
+                    const company = section.querySelector('.work-company').value;
+                    const location = section.querySelector('.work-location').value;
+                    const description = section.querySelector('.work-description').value;
+                    if (start || end || company || location || description) {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${start}</td>
+                            <td>${end}</td>
+                            <td>${company}</td>
+                            <td>${location}</td>
+                            <td>${description}</td>
+                        `;
+                        workTableBody.appendChild(row);
+                    }
+                }
+            }
+
+            // Organization
+            document.getElementById('outputSupervisoryOrg').textContent = document.getElementById('supervisoryOrg').value;
+            document.getElementById('outputOrgResidenceStatus').textContent = document.getElementById('orgResidenceStatus').value;
+
+            // Family Composition Table
+            const familyTableBody = document.getElementById('familyTableBody');
+            familyTableBody.innerHTML = '';
+            for (let i = 0; i < familyCount; i++) {
+                const section = document.getElementById(`family${i}`);
+                if (section) {
+                    const name = section.querySelector('.family-name').value;
+                    const relationship = section.querySelector('.family-relationship').value;
+                    const age = section.querySelector('.family-age').value;
+                    const occupation = section.querySelector('.family-occupation').value;
+                    if (name || relationship || age || occupation) {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${name}</td>
+                            <td>${relationship}</td>
+                            <td>${age}</td>
+                            <td>${occupation}</td>
+                        `;
+                        familyTableBody.appendChild(row);
+                    }
+                }
+            }
+
+            // Other Information
+            document.getElementById('outputBloodType').textContent = document.getElementById('bloodType').value;
+            document.getElementById('outputVision').textContent = document.getElementById('vision').value;
+            const colorBlindness = document.querySelector('input[name="colorBlindness"]:checked')?.value || '';
+            document.getElementById('outputColorBlindnessNo').textContent = colorBlindness === 'No' ? '[X]' : '[ ]';
+            document.getElementById('outputColorBlindnessYes').textContent = colorBlindness === 'Yes' ? '[X]' : '[ ]';
+            const dominantHand = document.querySelector('input[name="dominantHand"]:checked')?.value || '';
+            document.getElementById('outputDominantHandRight').textContent = dominantHand === 'Right' ? '[X]' : '[ ]';
+            document.getElementById('outputDominantHandLeft').textContent = dominantHand === 'Left' ? '[X]' : '[ ]';
+            const sweatyHands = document.querySelector('input[name="sweatyHands"]:checked')?.value || '';
+            document.getElementById('outputSweatyHandsYes').textContent = sweatyHands === 'Yes' ? '[X]' : '[ ]';
+            document.getElementById('outputSweatyHandsNo').textContent = sweatyHands === 'No' ? '[X]' : '[ ]';
+            document.getElementById('outputHeight').textContent = document.getElementById('height').value;
+            document.getElementById('outputWeight').textContent = document.getElementById('weight').value;
+            const tattoos = document.querySelector('input[name="tattoos"]:checked')?.value || '';
+            document.getElementById('outputTattoosYes').textContent = tattoos === 'Yes' ? '[X]' : '[ ]';
+            document.getElementById('outputTattoosNo').textContent = tattoos === 'No' ? '[X]' : '[ ]';
+            const smoking = document.querySelector('input[name="smoking"]:checked')?.value || '';
+            document.getElementById('outputSmokingYes').textContent = smoking === 'Yes' ? '[X]' : '[ ]';
+            document.getElementById('outputSmokingNo').textContent = smoking === 'No' ? '[X]' : '[ ]';
+            document.getElementById('outputSmokingOccasionally').textContent = smoking === 'Occasionally' ? '[X]' : '[ ]';
+            const drinking = document.querySelector('input[name="drinking"]:checked')?.value || '';
+            document.getElementById('outputDrinkingYes').textContent = drinking === 'Yes' ? '[X]' : '[ ]';
+            document.getElementById('outputDrinkingNo').textContent = drinking === 'No' ? '[X]' : '[ ]';
+            document.getElementById('outputDrinkingOccasionally').textContent = drinking === 'Occasionally' ? '[X]' : '[ ]';
+            document.getElementById('outputFoodRestrictions').textContent = document.getElementById('foodRestrictions').value;
+        }
+
+        function exportPDF() {
+            const element = document.getElementById('outputContainer');
+            html2pdf().from(element).set({
+                margin: 0.5,
+                filename: 'resume.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+            }).save();
+        }
+
+        function exportWord() {
+            const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } = docx;
+
+            const doc = new Document({
+                sections: [{
+                    properties: {},
+                    children: [
+                        new Paragraph({
+                            children: [new TextRun({ text: "Specific Skills Resume", bold: true, size: 24, break: 1 })]
+                        }),
+                        new Paragraph({
+                            children: [new TextRun({ text: "Personal Information", bold: true, size: 20, break: 1 })]
+                        }),
+                        new Paragraph({ children: [new TextRun(`Name: ${document.getElementById('outputName').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Date of Birth: ${document.getElementById('outputDob').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Age: ${document.getElementById('outputAge').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Gender: ${document.getElementById('outputGender').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Passport Number: ${document.getElementById('outputPassport').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Issue Date (Validity): ${document.getElementById('outputPassportIssueDate').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Issue Place: ${document.getElementById('outputPassportIssuePlace').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Marital Status: ${document.getElementById('outputMaritalSingle').textContent} Single ${document.getElementById('outputMaritalMarried').textContent} Married ${document.getElementById('outputMaritalDivorced').textContent} Divorced`)] }),
+                        new Paragraph({ children: [new TextRun(`Address in Nepal: ${document.getElementById('outputNepalAddress').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Address in Japan: ${document.getElementById('outputJapanAddress').textContent}`)] }),
+
+                        new Paragraph({
+                            children: [new TextRun({ text: "Residence Status and Qualifications", bold: true, size: 20, break: 1 })]
+                        }),
+                        new Paragraph({ children: [new TextRun(`Past Residence Status and Details: ${document.getElementById('outputPastResidence').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Residence Permit: ${document.getElementById('outputResidencePermitYes').textContent} Yes ${document.getElementById('outputResidencePermitNo').textContent} No`)] }),
+                        new Paragraph({ children: [new TextRun(`Specific Skills Evaluation Exam: ${document.getElementById('outputSpecificSkillsExamYes').textContent} Yes ${document.getElementById('outputSpecificSkillsExamNo').textContent} No`)] }),
+                        new Paragraph({ children: [new TextRun(`    Field: ${document.getElementById('outputField').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Trainee: ${document.getElementById('outputTrainee').textContent} ( ${document.getElementById('outputSpecialistGrade').textContent} Specialist Grade ${document.getElementById('outputThirdGrade').textContent} Third Grade ${document.getElementById('outputEvaluationReport').textContent} Evaluation Report )`)] }),
+                        new Paragraph({ children: [new TextRun(`    Trainee Occupation: ${document.getElementById('outputTraineeOccupation').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Specific Skills: ${document.getElementById('outputSpecificSkillsStatus').textContent} ( ${document.getElementById('outputSpecificSkills1st').textContent} 1st ${document.getElementById('outputSpecificSkills2nd').textContent} 2nd )`)] }),
+                        new Paragraph({ children: [new TextRun(`    Field and Category: ${document.getElementById('outputFieldCategory').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Residence Status: ${document.getElementById('outputResidenceStatus').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Residence Expiry: ${document.getElementById('outputResidenceExpiry').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Japanese Language Proficiency: ${document.getElementById('outputJapaneseProficiency').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Student Status: ${document.getElementById('outputStudent').textContent} Yes`)] }),
+                        new Paragraph({ children: [new TextRun(`Language Proficiency Test: ${document.getElementById('outputLanguageTestYes').textContent} Yes ${document.getElementById('outputLanguageTestNo').textContent} No`)] }),
+                        new Paragraph({ children: [new TextRun(`    Level and Institution: ${document.getElementById('outputLanguageTestDetails').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Desired Years of Service: ${document.getElementById('outputYearsOfService').textContent} Years`)] }),
+
+                        new Paragraph({
+                            children: [new TextRun({ text: "Education", bold: true, size: 20, break: 1 })]
+                        }),
+                        new Table({
+                            width: { size: 100, type: WidthType.PERCENTAGE },
+                            rows: [
+                                new TableRow({
+                                    children: [
+                                        new TableCell({ children: [new Paragraph("Start Year/Month")] }),
+                                        new TableCell({ children: [new Paragraph("End Year/Month")] }),
+                                        new TableCell({ children: [new Paragraph("School Name")] }),
+                                        new TableCell({ children: [new Paragraph("Major")] }),
+                                        new TableCell({ children: [new Paragraph("Specialization")] })
+                                    ]
+                                }),
+                                ...Array.from(document.getElementById('educationTableBody').children).map(row => new TableRow({
+                                    children: Array.from(row.children).map(cell => new TableCell({ children: [new Paragraph(cell.textContent)] }))
+                                }))
+                            ]
+                        }),
+
+                        new Paragraph({
+                            children: [new TextRun({ text: "Other Licenses/Certifications", bold: true, size: 20, break: 1 })]
+                        }),
+                        new Paragraph({ children: [new TextRun(document.getElementById('outputLicenses').textContent)] }),
+
+                        new Paragraph({
+                            children: [new TextRun({ text: "Work Experience in Japan", bold: true, size: 20, break: 1 })]
+                        }),
+                        new Table({
+                            width: { size: 100, type: WidthType.PERCENTAGE },
+                            rows: [
+                                new TableRow({
+                                    children: [
+                                        new TableCell({ children: [new Paragraph("Start Year/Month")] }),
+                                        new TableCell({ children: [new Paragraph("End Year/Month")] }),
+                                        new TableCell({ children: [new Paragraph("Company Name")] }),
+                                        new TableCell({ children: [new Paragraph("Location")] }),
+                                        new TableCell({ children: [new Paragraph("Business Description")] })
+                                    ]
+                                }),
+                                ...Array.from(document.getElementById('workTableBody').children).map(row => new TableRow({
+                                    children: Array.from(row.children).map(cell => new TableCell({ children: [new Paragraph(cell.textContent)] }))
+                                }))
+                            ]
+                        }),
+
+                        new Paragraph({
+                            children: [new TextRun({ text: "Organization", bold: true, size: 20, break: 1 })]
+                        }),
+                        new Paragraph({ children: [new TextRun(`Supervisory Organization and Support Agency: ${document.getElementById('outputSupervisoryOrg').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Residence Status: ${document.getElementById('outputOrgResidenceStatus').textContent}`)] }),
+
+                        new Paragraph({
+                            children: [new TextRun({ text: "Family Composition", bold: true, size: 20, break: 1 })]
+                        }),
+                        new Table({
+                            width: { size: 100, type: WidthType.PERCENTAGE },
+                            rows: [
+                                new TableRow({
+                                    children: [
+                                        new TableCell({ children: [new Paragraph("Name")] }),
+                                        new TableCell({ children: [new Paragraph("Relationship")] }),
+                                        new TableCell({ children: [new Paragraph("Age")] }),
+                                        new TableCell({ children: [new Paragraph("Occupation")] })
+                                    ]
+                                }),
+                                ...Array.from(document.getElementById('familyTableBody').children).map(row => new TableRow({
+                                    children: Array.from(row.children).map(cell => new TableCell({ children: [new Paragraph(cell.textContent)] }))
+                                }))
+                            ]
+                        }),
+
+                        new Paragraph({
+                            children: [new TextRun({ text: "Other Information", bold: true, size: 20, break: 1 })]
+                        }),
+                        new Paragraph({ children: [new TextRun(`Blood Type: ${document.getElementById('outputBloodType').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Vision: ${document.getElementById('outputVision').textContent}`)] }),
+                        new Paragraph({ children: [new TextRun(`Color Blindness: ${document.getElementById('outputColorBlindnessNo').textContent} No ${document.getElementById('outputColorBlindnessYes').textContent} Yes`)] }),
+                        new Paragraph({ children: [new TextRun(`Dominant Hand: ${document.getElementById('outputDominantHandRight').textContent} Right ${document.getElementById('outputDominantHandLeft').textContent} Left`)] }),
+                        new Paragraph({ children: [new TextRun(`Sweaty Hands: ${document.getElementById('outputSweatyHandsYes').textContent} Yes ${document.getElementById('outputSweatyHandsNo').textContent} No`)] }),
+                        new Paragraph({ children: [new TextRun(`Height: ${document.getElementById('outputHeight').textContent} cm`)] }),
+                        new Paragraph({ children: [new TextRun(`Weight: ${document.getElementById('outputWeight').textContent} kg`)] }),
+                        new Paragraph({ children: [new TextRun(`Tattoos: ${document.getElementById('outputTattoosYes').textContent} Yes ${document.getElementById('outputTattoosNo').textContent} No`)] }),
+                        new Paragraph({ children: [new TextRun(`Smoking: ${document.getElementById('outputSmokingYes').textContent} Yes ${document.getElementById('outputSmokingNo').textContent} No ${document.getElementById('outputSmokingOccasionally').textContent} Occasionally`)] }),
+                        new Paragraph({ children: [new TextRun(`Drinking: ${document.getElementById('outputDrinkingYes').textContent} Yes ${document.getElementById('outputDrinkingNo').textContent} No ${document.getElementById('outputDrinkingOccasionally').textContent} Occasionally`)] }),
+                        new Paragraph({ children: [new TextRun(`Food Restrictions: ${document.getElementById('outputFoodRestrictions').textContent}`)] })
+                    ]
+                }]
+            });
+
+            Packer.toBlob(doc).then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'resume.docx';
+                a.click();
+                window.URL.revokeObjectURL(url);
+            });
+        }
+
+        document.getElementById('photo').addEventListener('change', function(e) {
+            if (e.target.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.getElementById('photoPreview');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                };
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        });
+    </script>
+</body>
+</html>
